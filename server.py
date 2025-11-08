@@ -1,11 +1,13 @@
-from flask import Flask, jsonify, render_template_string
+from flask import Flask, jsonify
 import requests, csv, time, threading, os
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="static")
 
 DATA_FILE = "iss_data.csv"
 
+# -------------------------------
 # Function to fetch and save ISS data
+# -------------------------------
 def collect_data():
     while True:
         try:
@@ -24,21 +26,19 @@ def collect_data():
             print("Error:", e)
         time.sleep(60)  # collect every 1 minute
 
-# Run data collection in background thread
+# Start data collection in a background thread
 threading.Thread(target=collect_data, daemon=True).start()
 
-@app.route("/")
-def dashboard():
-    html = """
-    <html><head><title>ISS Tracker</title></head>
-    <body style='font-family:Arial;background:#001F3F;color:white;text-align:center'>
-        <h1>🌍 ISS Live Tracker</h1>
-        <p>Data is being collected automatically every minute.</p>
-        <p><a href="/data" style="color:cyan">View Latest Data</a></p>
-    </body></html>
-    """
-    return render_template_string(html)
+# -------------------------------
+# Routes
+# -------------------------------
 
+# Serve the static dashboard HTML
+@app.route("/")
+def home():
+    return app.send_static_file("index.html")
+
+# Return latest 10 records as JSON
 @app.route("/data")
 def data():
     rows = []
@@ -48,6 +48,8 @@ def data():
                 rows.append(row)
     return jsonify(rows[-10:])  # show last 10 records
 
+# -------------------------------
+# Run the app
+# -------------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-
