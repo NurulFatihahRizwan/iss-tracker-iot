@@ -1,12 +1,12 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_file
 import requests, csv, time, threading, os
 
-app = Flask(__name__, static_folder="static")
+app = Flask(__name__)
 
 DATA_FILE = "iss_data.csv"
 
 # -------------------------------
-# Function to fetch and save ISS data
+# Background data collection
 # -------------------------------
 def collect_data():
     while True:
@@ -24,7 +24,7 @@ def collect_data():
             print("Data saved:", data)
         except Exception as e:
             print("Error:", e)
-        time.sleep(60)  # collect every 1 minute
+        time.sleep(60)
 
 # Start data collection in a background thread
 threading.Thread(target=collect_data, daemon=True).start()
@@ -33,12 +33,10 @@ threading.Thread(target=collect_data, daemon=True).start()
 # Routes
 # -------------------------------
 
-# Serve the static dashboard HTML
 @app.route("/")
 def home():
-    return app.send_static_file("index.html")
+    return send_file("index.html")  # index.html is in the same folder as server.py
 
-# Return latest 10 records as JSON
 @app.route("/data")
 def data():
     rows = []
@@ -46,10 +44,8 @@ def data():
         with open(DATA_FILE) as f:
             for row in csv.reader(f):
                 rows.append(row)
-    return jsonify(rows[-10:])  # show last 10 records
+    return jsonify(rows[-10:])  # last 10 records
 
-# -------------------------------
-# Run the app
 # -------------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
