@@ -44,7 +44,7 @@ def data():
         with open(DATA_FILE) as f:
             for row in csv.reader(f):
                 rows.append(row)
-    return jsonify(rows[-10:])  # last 10 records
+    return jsonify(rows)  # return all records
 
 # -------------------------------
 if __name__ == "__main__":
