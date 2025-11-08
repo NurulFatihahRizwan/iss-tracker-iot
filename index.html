@@ -1,18 +1,90 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>ISS Monitor</title>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🛰️ ISS Live Tracker</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
   <style>
-    body { background:#001F3F; color:white; font-family:Arial; text-align:center; }
-    iframe { width:90%; height:500px; border:none; border-radius:10px; }
+    body {
+      margin: 0;
+      background-color: #001F3F;
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    h1 { margin: 10px 0; color: #00bfff; }
+    #map { height: 80vh; width: 100%; border-radius: 12px; }
+    footer { margin-top: 10px; font-size: 0.9em; color: #aaa; }
   </style>
 </head>
+
 <body>
-  <h1>🛰️ ISS Live Location</h1>
-  <iframe src="https://iss-map.com" title="ISS Map"></iframe>
-  <p>Data is being collected in the background.</p>
-  <p><a href="/data" style="color:cyan">Check last data points</a></p>
+  <h1>🛰️ ISS Live Tracker</h1>
+  <p>Showing current ISS position and recent path.</p>
+
+  <div id="map"></div>
+
+  <footer>
+    Data from <a href="https://api.wheretheiss.at/v1/satellites/25544" style="color:#00bfff" target="_blank">WhereTheISS.at API</a>
+  </footer>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <script>
+    // Initialize map
+    const map = L.map('map').setView([0, 0], 2);
+
+    // Dark base map (CartoDB DarkMatter)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap, &copy; CartoDB',
+      maxZoom: 5
+    }).addTo(map);
+
+    // Create ISS marker (custom glowing icon)
+    const issIcon = L.icon({
+      iconUrl: 'https://upload.wikimedia.org/wikipedia/commons/d/d0/International_Space_Station.svg',
+      iconSize: [40, 40],
+      iconAnchor: [20, 20],
+    });
+
+    let issMarker = L.marker([0, 0], {icon: issIcon}).addTo(map);
+    let pathLine = L.polyline([], {color: '#00bfff', weight: 2}).addTo(map);
+
+    // Function to fetch data
+    async function fetchISSData() {
+      try {
+        const res = await fetch('/data');
+        const json = await res.json();
+        if (!json.length) return;
+
+        // Get latest data (last element)
+        const latest = json[json.length - 1];
+        const lat = parseFloat(latest[1]);
+        const lon = parseFloat(latest[2]);
+        const alt = parseFloat(latest[3]);
+
+        // Update marker position
+        issMarker.setLatLng([lat, lon]);
+        map.setView([lat, lon], 3);
+
+        // Update path
+        const coords = json.map(row => [parseFloat(row[1]), parseFloat(row[2])]);
+        pathLine.setLatLngs(coords);
+
+        document.title = `🛰️ ISS @ ${lat.toFixed(2)}, ${lon.toFixed(2)} (${alt.toFixed(0)} km)`;
+      } catch (err) {
+        console.error("Error fetching ISS data:", err);
+      }
+    }
+
+    // Refresh every 30 seconds
+    fetchISSData();
+    setInterval(fetchISSData, 30000);
+  </script>
 </body>
 </html>
-
