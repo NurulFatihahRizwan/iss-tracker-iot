@@ -1,90 +1,153 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🛰️ ISS Live Tracker</title>
-
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-
-  <style>
-    body {
-      margin: 0;
-      background-color: #001F3F;
-      color: white;
-      font-family: Arial, sans-serif;
-      text-align: center;
-    }
-    h1 { margin: 10px 0; color: #00bfff; }
-    #map { height: 80vh; width: 100%; border-radius: 12px; }
-    footer { margin-top: 10px; font-size: 0.9em; color: #aaa; }
-  </style>
+    <meta charset="UTF-8">
+    <title>🌍 ISS Live Tracker Dashboard</title>
+    <link 
+      rel="stylesheet" 
+      href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', Arial, sans-serif;
+            background: #001F3F;
+            color: white;
+            margin: 0;
+            padding: 0;
+        }
+        h1 {
+            text-align: center;
+            margin-top: 20px;
+            font-weight: 700;
+        }
+        .info {
+            text-align: center;
+            margin: 10px 0;
+        }
+        #map {
+            height: 450px;
+            width: 90%;
+            margin: 20px auto;
+            border: 2px solid cyan;
+            border-radius: 10px;
+        }
+        .charts {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 25px;
+            margin: 20px;
+        }
+        canvas {
+            background: #012F5F;
+            border-radius: 10px;
+            padding: 10px;
+        }
+        a {
+            color: cyan;
+            text-decoration: none;
+        }
+    </style>
 </head>
-
 <body>
-  <h1>🛰️ ISS Live Tracker</h1>
-  <p>Showing current ISS position and recent path.</p>
 
-  <div id="map"></div>
+<h1>🌍 ISS Live Tracker Dashboard</h1>
 
-  <footer>
-    Data from <a href="https://api.wheretheiss.at/v1/satellites/25544" style="color:#00bfff" target="_blank">WhereTheISS.at API</a>
-  </footer>
+<div class="info">
+    <p>Latest Data Collected: <span id="timestamp">--</span></p>
+    <p>Current ISS Altitude: <span id="altitude">--</span> km</p>
+</div>
 
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<div id="map"></div>
 
-  <script>
-    // Initialize map
+<div class="charts">
+    <canvas id="latChart" width="400" height="200"></canvas>
+    <canvas id="lonChart" width="400" height="200"></canvas>
+    <canvas id="altChart" width="400" height="200"></canvas>
+</div>
+
+<script>
+    // Leaflet map setup
     const map = L.map('map').setView([0, 0], 2);
-
-    // Dark base map (CartoDB DarkMatter)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap, &copy; CartoDB',
-      maxZoom: 5
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // Create ISS marker (custom glowing icon)
-    const issIcon = L.icon({
-      iconUrl: 'https://upload.wikimedia.org/wikipedia/commons/d/d0/International_Space_Station.svg',
-      iconSize: [40, 40],
-      iconAnchor: [20, 20],
+    const issMarker = L.marker([0, 0]).addTo(map).bindPopup("ISS Position");
+
+    // Chart.js setup
+    const latCtx = document.getElementById('latChart').getContext('2d');
+    const lonCtx = document.getElementById('lonChart').getContext('2d');
+    const altCtx = document.getElementById('altChart').getContext('2d');
+
+    const latChart = new Chart(latCtx, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'Latitude', data: [], borderColor: 'cyan', fill: false }] },
+        options: { responsive: true, scales: { y: { beginAtZero: false } } }
     });
 
-    let issMarker = L.marker([0, 0], {icon: issIcon}).addTo(map);
-    let pathLine = L.polyline([], {color: '#00bfff', weight: 2}).addTo(map);
+    const lonChart = new Chart(lonCtx, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'Longitude', data: [], borderColor: 'magenta', fill: false }] },
+        options: { responsive: true, scales: { y: { beginAtZero: false } } }
+    });
 
-    // Function to fetch data
-    async function fetchISSData() {
-      try {
-        const res = await fetch('/data');
-        const json = await res.json();
-        if (!json.length) return;
+    const altChart = new Chart(altCtx, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'Altitude (km)', data: [], borderColor: 'yellow', fill: false }] },
+        options: { responsive: true, scales: { y: { beginAtZero: false } } }
+    });
 
-        // Get latest data (last element)
-        const latest = json[json.length - 1];
-        const lat = parseFloat(latest[1]);
-        const lon = parseFloat(latest[2]);
-        const alt = parseFloat(latest[3]);
+    // Fetch data and update dashboard
+    async function updateData() {
+        try {
+            const response = await fetch("/data");
+            const data = await response.json();
+            if (!data.length) return;
 
-        // Update marker position
-        issMarker.setLatLng([lat, lon]);
-        map.setView([lat, lon], 3);
+            const latest = data[data.length - 1];
+            const timestamps = data.map(d => new Date(d[0]*1000).toLocaleTimeString());
+            const latitudes = data.map(d => parseFloat(d[1]));
+            const longitudes = data.map(d => parseFloat(d[2]));
+            const altitudes = data.map(d => parseFloat(d[3]));
 
-        // Update path
-        const coords = json.map(row => [parseFloat(row[1]), parseFloat(row[2])]);
-        pathLine.setLatLngs(coords);
+            // Update info
+            document.getElementById("timestamp").innerText = new Date(latest[0]*1000).toLocaleString();
+            document.getElementById("altitude").innerText = latest[3];
 
-        document.title = `🛰️ ISS @ ${lat.toFixed(2)}, ${lon.toFixed(2)} (${alt.toFixed(0)} km)`;
-      } catch (err) {
-        console.error("Error fetching ISS data:", err);
-      }
+            // Update charts
+            latChart.data.labels = timestamps;
+            latChart.data.datasets[0].data = latitudes;
+            latChart.update();
+
+            lonChart.data.labels = timestamps;
+            lonChart.data.datasets[0].data = longitudes;
+            lonChart.update();
+
+            altChart.data.labels = timestamps;
+            altChart.data.datasets[0].data = altitudes;
+            altChart.update();
+
+            // Update ISS marker
+            const lat = parseFloat(latest[1]);
+            const lon = parseFloat(latest[2]);
+            issMarker.setLatLng([lat, lon])
+                     .setPopupContent(`ISS Position:<br>Lat: ${lat.toFixed(2)}, Lon: ${lon.toFixed(2)}`)
+                     .openPopup();
+            map.setView([lat, lon], map.getZoom());
+
+        } catch (err) {
+            console.error("Error fetching data:", err);
+        }
     }
 
-    // Refresh every 30 seconds
-    fetchISSData();
-    setInterval(fetchISSData, 30000);
-  </script>
+    // Initial load
+    updateData();
+    // Refresh every 60 seconds
+    setInterval(updateData, 60000);
+</script>
+
 </body>
 </html>
